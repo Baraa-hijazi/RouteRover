@@ -1,11 +1,17 @@
+using Microsoft.OpenApi.Models;
+using RouteRover.Options;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddSwaggerGen(c => c.SwaggerDoc("v1", new OpenApiInfo { Title = "Directions", Version = "v1" }));
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddHttpClient();
+
+// Options
+builder.Services.AddOptions<GoogleMapsOptions>().Bind(builder.Configuration.GetSection(GoogleMapsOptions.GoogleMaps));
 
 var app = builder.Build();
 

@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using RouteRover.DTOs;
+using RouteRover.Options;
 
 namespace RouteRover.Controllers;
 
@@ -6,47 +9,44 @@ namespace RouteRover.Controllers;
 [ApiController]
 public class DirectionsController : ControllerBase
 {
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly GoogleMapsOptions _options;
+    private readonly HttpClient _httpClient;
 
-    public DirectionsController(IHttpClientFactory httpClientFactory)
+    public DirectionsController(HttpClient httpClient, IOptions<GoogleMapsOptions> options)
     {
-        _httpClientFactory = httpClientFactory;
+        _options = options.Value;
+        _httpClient = httpClient;
+        _httpClient.BaseAddress = new Uri(_options.Uri);
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetDirections(double originLat, double originLng, double destinationLat,
-        double destinationLng, string apiKey)
+    public async Task<IActionResult> GetDirections([FromQuery] LatLng latLng)
     {
         try
         {
-            using var client = _httpClientFactory.CreateClient();
+            var apiUrl = $"directions/json?origin={latLng.OriginLatitude},{latLng.OriginLongitude}" +
+                         $"&destination={latLng.DestinationLatitude},{latLng.DestinationLongitude}" +
+                         $"&key={_options.Key}";
 
-            var apiUrl = $"https://maps.googleapis.com/maps/api/directions/json?origin={originLat},{originLng}&destination={destinationLat},{destinationLng}&key={apiKey}";
+            var response = await _httpClient.GetAsync(apiUrl);
 
-            // Send the HTTP request to the API
-            var response = await client.GetAsync(apiUrl);
+            if (!response.IsSuccessStatusCode) return BadRequest("Unable to retrieve directions.");
 
-            if (response.IsSuccessStatusCode)
+            var responseData = await response.Content.ReadFromJsonAsync<GoogleMapsDirectionsResponse>();
+
+            if (!(responseData?.Routes.Count > 0)) return BadRequest("Unable to retrieve directions.");
+
+            var route = responseData.Routes[0];
+            var duration = route.Legs[0].Duration;
+            var distance = route.Legs[0].Distance;
+
+            return Ok(new
             {
-                var responseData = await response.Content.ReadFromJsonAsync<GoogleMapsDirectionsResponse>();
-                if (responseData?.Routes.Count > 0)
-                {
-                    // Extract data and return it
-                    var route = responseData.Routes[0];
-                    var duration = route.Legs[0].Duration;
-                    var distance = route.Legs[0].Distance;
-
-                    return Ok(new
-                    {
-                        Origin = new { Latitude = originLat, Longitude = originLng },
-                        Destination = new { Latitude = destinationLat, Longitude = destinationLng },
-                        Duration = new { duration.Text, duration.Value },
-                        Distance = new { distance.Text, distance.Value }
-                    });
-                }
-            }
-
-            return BadRequest("Unable to retrieve directions.");
+                Origin = new { Latitude = latLng.OriginLatitude, Longitude = latLng.OriginLongitude },
+                Destination = new { Latitude = latLng.DestinationLatitude, Longitude = latLng.DestinationLongitude },
+                Duration = new { duration.Text, duration.Value },
+                Distance = new { distance.Text, distance.Value }
+            });
         }
         catch (Exception ex)
         {

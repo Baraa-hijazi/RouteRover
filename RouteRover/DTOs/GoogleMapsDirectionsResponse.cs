@@ -1,4 +1,4 @@
-namespace RouteRover;
+namespace RouteRover.DTOs;
 
 public class GoogleMapsDirectionsResponse
 {
